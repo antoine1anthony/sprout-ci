@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 
 export default function Layout() {
   return (
-    <View className="flex-1 bg-white">
+    <View className='flex-1 bg-white'>
       <Stack
         screenOptions={{
           headerStyle: {
@@ -17,4 +17,4 @@ export default function Layout() {
       />
     </View>
   );
-} 
+}
