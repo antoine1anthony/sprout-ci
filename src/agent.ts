@@ -347,7 +347,7 @@ export async function chatWithAgent(
 
     // Submit tool results and get final response
     const finalResponse = await openai.responses.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4.1',
       input: [
         { role: 'user', content: userPrompt },
         ...toolResults.map((result) => ({
