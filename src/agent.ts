@@ -1,5 +1,5 @@
 // src/agent.ts
-// Comprehensive skeleton to wire an AI‑driven CI/CD Agent using OpenAI function‑calling + GitHub + AWS SDK
+// Comprehensive skeleton to wire an AI‑driven CI/CD Agent using OpenAI Responses API + GitHub + AWS SDK
 // ────────────────────────────────────────────────────────────────────────────────
 // NOTE: This file focuses on structure. Replace TODO blocks with real logic.
 // Dependencies (npm): openai, @octokit/rest, aws-sdk, aws-cdk-lib (optional),
@@ -7,15 +7,13 @@
 //
 // Config ------------------------------------------------------------------------
 import 'dotenv/config';
-import { ChatCompletion, ClientOptions, OpenAI } from 'openai';
+import OpenAI from 'openai';
 import { Octokit } from '@octokit/rest';
 import AWS from 'aws-sdk';
 // import k8s from '@kubernetes/client-node';
 // import PrometheusDriver from 'prometheus-api-client';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-} as ClientOptions);
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const octokit = new Octokit({ auth: process.env.GITHUB_APP_TOKEN });
 AWS.config.update({ region: process.env.AWS_REGION });
 
@@ -137,62 +135,239 @@ export async function evaluateStability(args: {
   return { score: 92, summary: 'Latencies +3 %, within SLA' };
 }
 
-// OpenAI function definitions ---------------------------------------------------
-const llmFunctions: ChatCompletion['functions'] = [
+// Tool definitions for OpenAI Responses API ------------------------------------
+const tools = [
   {
+    type: 'function' as const,
     name: 'provisionEksCluster',
-    description: 'Provision a new EKS cluster for CI workloads',
+    description: 'Provision a new EKS cluster with specified configuration',
     parameters: {
       type: 'object',
       properties: {
-        clusterName: { type: 'string' },
-        nodeType: { type: 'string' },
-        desiredCapacity: { type: 'integer' },
-        version: { type: 'string' },
+        clusterName: {
+          type: 'string',
+          description: 'Name of the EKS cluster',
+        },
+        nodeType: {
+          type: 'string',
+          description: 'EC2 instance type for worker nodes',
+        },
+        desiredCapacity: {
+          type: 'integer',
+          description: 'Number of worker nodes',
+        },
+        version: {
+          type: 'string',
+          description: 'Kubernetes version',
+        },
       },
-      required: ['clusterName'],
+      required: ['clusterName', 'nodeType', 'desiredCapacity', 'version'],
+      additionalProperties: false,
     },
+    strict: true,
   },
   {
+    type: 'function' as const,
     name: 'installArgo',
-    description: 'Install Argo CD/Workflows/Events via Helm',
+    description: 'Install Argo CD on the EKS cluster',
     parameters: {
       type: 'object',
       properties: {
-        clusterName: { type: 'string' },
-        argoVersion: { type: 'string' },
+        clusterName: {
+          type: 'string',
+          description: 'Name of the EKS cluster',
+        },
+        argoVersion: {
+          type: 'string',
+          description: 'Version of Argo CD to install',
+        },
       },
-      required: ['clusterName'],
+      required: ['clusterName', 'argoVersion'],
+      additionalProperties: false,
     },
+    strict: true,
   },
-  // ...add entries for each exported function
+  {
+    type: 'function' as const,
+    name: 'configureGitHubWebhook',
+    description: 'Configure GitHub webhook for repository',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: {
+          type: 'string',
+          description: 'GitHub repository owner',
+        },
+        repo: {
+          type: 'string',
+          description: 'GitHub repository name',
+        },
+        webhookUrl: {
+          type: 'string',
+          description: 'URL for the webhook endpoint',
+        },
+      },
+      required: ['owner', 'repo', 'webhookUrl'],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: 'function' as const,
+    name: 'generateCiWorkflowTemplate',
+    description: 'Generate GitHub Actions workflow template',
+    parameters: {
+      type: 'object',
+      properties: {
+        languages: {
+          type: 'array',
+          items: {
+            type: 'string',
+          },
+          description: 'Programming languages used in the project',
+        },
+        coverageThreshold: {
+          type: 'number',
+          description: 'Minimum code coverage percentage',
+        },
+        severityFailLevel: {
+          type: 'string',
+          description: 'Minimum severity level to fail the build',
+        },
+      },
+      required: ['languages', 'coverageThreshold', 'severityFailLevel'],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: 'function' as const,
+    name: 'commitManifest',
+    description: 'Commit Kubernetes manifest to repository',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: {
+          type: 'string',
+          description: 'GitHub repository owner',
+        },
+        repo: {
+          type: 'string',
+          description: 'GitHub repository name',
+        },
+        branch: {
+          type: 'string',
+          description: 'Target branch name',
+        },
+        filePath: {
+          type: 'string',
+          description: 'Path to the manifest file',
+        },
+        content: {
+          type: 'string',
+          description: 'Content of the manifest file',
+        },
+        message: {
+          type: 'string',
+          description: 'Commit message',
+        },
+      },
+      required: ['owner', 'repo', 'branch', 'filePath', 'content', 'message'],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: 'function' as const,
+    name: 'evaluateStability',
+    description: 'Evaluate deployment stability using Prometheus metrics',
+    parameters: {
+      type: 'object',
+      properties: {
+        prometheusUrl: {
+          type: 'string',
+          description: 'Prometheus server URL',
+        },
+        namespace: {
+          type: 'string',
+          description: 'Kubernetes namespace',
+        },
+        deploymentName: {
+          type: 'string',
+          description: 'Name of the deployment',
+        },
+        baselineWindowMinutes: {
+          type: 'integer',
+          description: 'Time window for baseline metrics',
+        },
+        liveWindowMinutes: {
+          type: 'integer',
+          description: 'Time window for live metrics',
+        },
+      },
+      required: [
+        'prometheusUrl',
+        'namespace',
+        'deploymentName',
+        'baselineWindowMinutes',
+        'liveWindowMinutes',
+      ],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
 ];
 
-// Chat orchestration loop (simplified) -----------------------------------------
-export async function chatWithAgent(userPrompt: string) {
-  const messages: ChatCompletion['messages'] = [
-    { role: 'user', content: userPrompt },
-  ];
-  let shouldContinue = true;
-  while (shouldContinue) {
-    const response = await openai.chat.completions.create({
+// Chat orchestration loop with Responses API -----------------------------------
+export async function chatWithAgent(
+  userPrompt: string,
+  previousResponseId?: string,
+) {
+  const response = await openai.responses.create({
+    model: 'gpt-4.1',
+    input: [{ role: 'user', content: userPrompt }],
+    tools,
+    previous_response_id: previousResponseId,
+    store: true, // Enable conversation state persistence
+  });
+
+  if ('tool_calls' in response && Array.isArray(response.tool_calls)) {
+    const toolResults = await Promise.all(
+      response.tool_calls.map(async (toolCall) => {
+        const { name, arguments: rawArgs } = toolCall.function;
+        const args = JSON.parse(rawArgs);
+        const result = await (exports as any)[name](args);
+        return {
+          type: 'function_call_output' as const,
+          call_id: toolCall.id,
+          output: JSON.stringify(result),
+        };
+      }),
+    );
+
+    // Submit tool results and get final response
+    const finalResponse = await openai.responses.create({
       model: 'gpt-4o-mini',
-      messages,
-      functions: llmFunctions,
+      input: [
+        { role: 'user', content: userPrompt },
+        ...toolResults.map((result) => ({
+          type: result.type,
+          call_id: result.call_id,
+          output: result.output,
+        })),
+      ],
+      previous_response_id: response.id,
+      store: true,
     });
-    const msg = response.choices[0].message;
-    if (msg.function_call) {
-      const { name, arguments: rawArgs } = msg.function_call;
-      const args = JSON.parse(rawArgs || '{}');
-      const result = await (exports as any)[name](args);
-      messages.push({
-        role: 'function',
-        name,
-        content: JSON.stringify(result),
-      });
-    } else {
-      shouldContinue = false;
-      return msg.content;
-    }
+
+    return {
+      content: finalResponse.output_text,
+      responseId: finalResponse.id,
+    };
   }
+
+  return {
+    content: response.output_text,
+    responseId: response.id,
+  };
 }
