@@ -14,13 +14,13 @@ export default function Index() {
             Quick Actions
           </Text>
           <View className='space-y-2'>
-            <TouchableOpacity className='bg-blue-500 p-3 rounded-lg'>
+            <TouchableOpacity className='bg-blue-500 p-3 rounded-lg' accessibilityRole="button">
               <Text className='text-white text-center font-medium'>
                 Connect Repository
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity className='bg-green-500 p-3 rounded-lg'>
+            <TouchableOpacity className='bg-green-500 p-3 rounded-lg' accessibilityRole="button">
               <Text className='text-white text-center font-medium'>
                 View Pipelines
               </Text>
