@@ -335,7 +335,13 @@ export async function chatWithAgent(
     const toolResults = await Promise.all(
       response.tool_calls.map(async (toolCall) => {
         const { name, arguments: rawArgs } = toolCall.function;
-        const args = JSON.parse(rawArgs);
+        let args;
+        try {
+          args = JSON.parse(rawArgs);
+        } catch (error) {
+          console.error(`Failed to parse arguments for tool "${name}":`, error);
+          throw new Error(`Invalid arguments provided for tool "${name}".`);
+        }
         const result = await (exports as any)[name](args);
         return {
           type: 'function_call_output' as const,
